@@ -79,6 +79,7 @@ class MyStrategy extends Strategy {
   private def drivePuck(self: Hockeyist, world: World, game: Game, move: Move) {
     val Some((netX, netY)) = for {
       opponentPlayer <- world.opponentPlayer
+
       netX = 0.5D * (opponentPlayer.netBack + opponentPlayer.netFront)
       netY = {
         val ny = 0.5D * (opponentPlayer.netBottom + opponentPlayer.netTop)
@@ -103,6 +104,15 @@ class MyStrategy extends Strategy {
     else {
 
     }
+  }
+
+  private def getEnemyGoalie(w: World) = {
+    val hs = for (
+      h <- w.hockeyists;
+      p <- w.myPlayer
+      if h.playerId == p.id && h.hokeyistType == HockeyistType.Goalie
+    ) yield h
+    hs(0)
   }
 
 }
