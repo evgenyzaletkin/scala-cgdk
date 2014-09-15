@@ -2,7 +2,7 @@ import model.{Hockeyist, World, Game, Move, ActionType, HockeyistType, Hockeyist
 import MyStrategy.{StrikeAngle, getNearestOpponent}
 
 object MyStrategy {
-  private def getNearestOpponent(x: Double, y: Double, world: World): Option[Hockeyist] = {
+  private def getNearestOpponent(x: Double, y: Double, world: World) = {
     val hockeyists = world.hockeyists.collect({
       case hockeyist if !hockeyist.teammate && hockeyist.hokeyistType != HockeyistType.Goalie
         && hockeyist.state != HockeyistState.KnockedDown && hockeyist.state != HockeyistState.Resting
@@ -22,10 +22,24 @@ object MyStrategy {
 }
 
 class MyStrategy extends Strategy {
+
+  var swingingTime = 0
+
   def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
     self.state match {
-      case HockeyistState.Swinging => move.action = ActionType.Strike
+      case HockeyistState.Swinging => actSwinging(self, move)
       case _ => actActive(self, world, game, move)
+    }
+  }
+
+  def actSwinging(self: Hockeyist, move: Move) = {
+
+    if (swingingTime >= 9) {
+      swingingTime = 0
+      move.action = ActionType.Strike
+    }
+    else {
+      swingingTime += 1
     }
   }
 
@@ -68,7 +82,7 @@ class MyStrategy extends Strategy {
       netX = 0.5D * (opponentPlayer.netBack + opponentPlayer.netFront)
       netY = {
         val ny = 0.5D * (opponentPlayer.netBottom + opponentPlayer.netTop)
-        ny + ((if (self.y < ny) 0.5D else -0.5D) * game.goalNetHeight)
+        ny + ((if (self.y < ny) 0.45D else -0.45D) * game.goalNetHeight)
       }
     } yield (netX, netY)
 
@@ -78,4 +92,17 @@ class MyStrategy extends Strategy {
       move.action = ActionType.Swing
     }
   }
+
+  private def moveToEdge(self: Hockeyist, world: World, move: Move) = {
+    val Some((netTop, netBottom)) = for (
+      opponentPlayer <- world.opponentPlayer
+    ) yield (opponentPlayer.netTop, opponentPlayer.netBottom)
+    if (self.y > netTop || self.y < netBottom) {
+      //strike
+    }
+    else {
+
+    }
+  }
+
 }
