@@ -58,7 +58,7 @@ class MyStrategy extends Strategy {
   }
 
 
-  private def strikeNearestOpponent(self: Hockeyist, world: World, game: Game, move: Move) {
+  def strikeNearestOpponent(self: Hockeyist, world: World, game: Game, move: Move) {
     for (nearestOpponent <- getNearestOpponent(self.x, self.y, world)) {
       if (self.distanceTo(nearestOpponent) > game.stickLength) {
         move.speedUp = 1.0D
@@ -70,20 +70,20 @@ class MyStrategy extends Strategy {
     }
   }
 
-  private def moveToPuck(self: Hockeyist, puck: Puck, move: Move) {
+  def moveToPuck(self: Hockeyist, puck: Puck, move: Move) {
     move.speedUp = 1.0D
     move.turn = self.angleTo(puck)
     move.action = ActionType.TakePuck
   }
 
-  private def drivePuck(self: Hockeyist, world: World, game: Game, move: Move) {
+  def drivePuck(self: Hockeyist, world: World, game: Game, move: Move) {
     val Some((netX, netY)) = for {
       opponentPlayer <- world.opponentPlayer
 
       netX = 0.5D * (opponentPlayer.netBack + opponentPlayer.netFront)
       netY = {
         val ny = 0.5D * (opponentPlayer.netBottom + opponentPlayer.netTop)
-        ny + ((if (self.y < ny) 0.45D else -0.45D) * game.goalNetHeight)
+        ny + ((if (self.y < ny) 0.49D else -0.49D) * game.goalNetHeight)
       }
     } yield (netX, netY)
 
@@ -94,25 +94,46 @@ class MyStrategy extends Strategy {
     }
   }
 
-  private def moveToEdge(self: Hockeyist, world: World, move: Move) = {
-    val Some((netTop, netBottom)) = for (
+  def moveToEdge(self: Hockeyist, world: World, game: Game, move: Move) = {
+    val Some((netTop, netBottom, netX)) = for (
       opponentPlayer <- world.opponentPlayer
-    ) yield (opponentPlayer.netTop, opponentPlayer.netBottom)
-    if (self.y > netTop || self.y < netBottom) {
-      //strike
+    ) yield (opponentPlayer.netTop, opponentPlayer.netBottom, 0.5 * (opponentPlayer.netFront + opponentPlayer.netBack))
+    if (self.y >= netTop) {
+      //strike to bottom edge
+      val angle = self.angleTo(netX, netBottom)
+      performStrike(move, angle)
+    }
+    else if (self.y <= netBottom) {
+      val angle = self.angleTo(netX, netTop)
+      performStrike(move, angle)
     }
     else {
+      val distanceToTop = netTop - self.y
+      val distanceToBottom = self.y - netBottom
+      if (distanceToTop > distanceToBottom) {
+
+      }
 
     }
   }
+  def performStrike(move: Move, angleToStrike: Double) {
+    move.turn = angleToStrike
+    if (math.abs(angleToStrike) < StrikeAngle)
+      move.action = ActionType.Swing
+  }
 
-  private def getEnemyGoalie(w: World) = {
+
+
+  def getEnemyGoalie(w: World) = {
     val hs = for (
       h <- w.hockeyists;
       p <- w.myPlayer
       if h.playerId == p.id && h.hokeyistType == HockeyistType.Goalie
     ) yield h
-    hs(0)
+    hs match {
+      case h :: hs1 => Some(h)
+      case Nil => None
+    } 
   }
 
 }
