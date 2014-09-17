@@ -24,6 +24,7 @@ object MyStrategy {
 class MyStrategy extends Strategy {
 
   var swingingTime = 0
+  var isHitting = false
 
   def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
     self.state match {
@@ -34,19 +35,27 @@ class MyStrategy extends Strategy {
 
   def actSwinging(self: Hockeyist, move: Move) = {
 
-    if (swingingTime >= 9) {
-      swingingTime = 0
+    if (swingingTime  == 0) {
       move.action = ActionType.Strike
     }
     else {
-      swingingTime += 1
+      swingingTime -= 1
     }
   }
 
   def actActive(self: Hockeyist, world: World, game: Game, move: Move) = {
     if (world.puck.ownerPlayerId.contains(self.playerId)) {
       if (world.puck.ownerHockeyistId.contains(self.id)) {
-        drivePuck(self, world, game, move)
+        isHitting = false
+        getEnemyGoalie(world) match {
+          case None => {
+            val opponent = world.opponentPlayer.get
+            val netX = (opponent.netRight + opponent.netLeft) * 0.5
+            val netY = (opponent.netTop + opponent.netBottom) * 0.5
+            swing(move, self, self.angleTo(netX, netY), 0)
+          }
+          case _ => drivePuck (self, world, game, move)
+        }
       }
       else {
         strikeNearestOpponent(self, world, game, move)
@@ -77,49 +86,48 @@ class MyStrategy extends Strategy {
   }
 
   def drivePuck(self: Hockeyist, world: World, game: Game, move: Move) {
-    val Some((netX, netY)) = for {
-      opponentPlayer <- world.opponentPlayer
-
-      netX = 0.5D * (opponentPlayer.netBack + opponentPlayer.netFront)
-      netY = {
-        val ny = 0.5D * (opponentPlayer.netBottom + opponentPlayer.netTop)
-        ny + ((if (self.y < ny) 0.49D else -0.49D) * game.goalNetHeight)
-      }
-    } yield (netX, netY)
-
-    val angleToNet = self.angleTo(netX, netY)
-    move.turn = angleToNet
-    if (math.abs(angleToNet) < StrikeAngle) {
-      move.action = ActionType.Swing
-    }
-  }
-
-  def moveToEdge(self: Hockeyist, world: World, game: Game, move: Move) = {
     val Some((netTop, netBottom, netX)) = for (
       opponentPlayer <- world.opponentPlayer
     ) yield (opponentPlayer.netTop, opponentPlayer.netBottom, 0.5 * (opponentPlayer.netFront + opponentPlayer.netBack))
-    if (self.y >= netTop) {
-      //strike to bottom edge
-      val angle = self.angleTo(netX, netBottom)
-      performStrike(move, angle)
-    }
-    else if (self.y <= netBottom) {
-      val angle = self.angleTo(netX, netTop)
-      performStrike(move, angle)
+    val distanceToGoal = game.goalNetHeight * math.tan(math.Pi / 3)
+    val targetX = if (netX > (world.width / 2.0)) netX - distanceToGoal else netX + distanceToGoal
+    val targetY = if (self.y > (world.height / 2.0)) netTop else netBottom
+    if (!isHitting && !isInPosition(targetX, targetY, self, game)) {
+      if (self.distanceTo(targetX, targetY) > 200)
+        move.speedUp = 1.0D
+      val angle = self.angleTo(targetX, targetY)
+      move.turn = angle
     }
     else {
-      val distanceToTop = netTop - self.y
-      val distanceToBottom = self.y - netBottom
-      if (distanceToTop > distanceToBottom) {
-
+      isHitting = true
+      val angleToStrike = if (self.y > world.height * 0.5) {
+        self.angleTo(netX, netTop)
+      } else {
+        self.angleTo(netX, netBottom)
       }
-
+      swing(move, self, angleToStrike, 5)
     }
   }
-  def performStrike(move: Move, angleToStrike: Double) {
+
+  def isInPosition(x: Double, y: Double, self: Hockeyist, game:Game) = {
+    val isInXRange = self.x > x - 100 && self.x < x + 100
+    val isInYRange = if (y <= game.goalNetTop) {
+      self.y < y
+    }
+    else {
+      self.y > y
+    }
+    isInXRange && isInYRange
+  }
+
+
+  def swing(move: Move, self: Hockeyist, angleToStrike: Double, swingingTime: Int) {
+
     move.turn = angleToStrike
-    if (math.abs(angleToStrike) < StrikeAngle)
+    if (math.abs(angleToStrike) < StrikeAngle) {
+      this.swingingTime = swingingTime
       move.action = ActionType.Swing
+    }
   }
 
 
@@ -131,8 +139,8 @@ class MyStrategy extends Strategy {
       if h.playerId == p.id && h.hokeyistType == HockeyistType.Goalie
     ) yield h
     hs match {
-      case h :: hs1 => Some(h)
-      case Nil => None
+      case h +: hs1 => Some(h)
+      case Vector() => None
     } 
   }
 
